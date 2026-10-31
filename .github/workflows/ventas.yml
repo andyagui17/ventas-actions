@@ -1,0 +1,66 @@
+name: Ventas - CI y CD
+
+on:
+  push:
+    branches: [main]
+
+  pull_request:
+    branches: [main]
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ventas-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verificar:
+    name: CI - Probar y generar informe
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Obtener archivos del repositorio
+        uses: actions/checkout@v6
+
+      - name: Preparar Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Ejecutar pruebas
+        run: python -m unittest discover -v
+
+      - name: Procesar las ventas actuales
+        run: python analizar.py
+
+      - name: Preparar GitHub Pages
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+
+      - name: Guardar informe para publicar
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: public
+
+  publicar:
+    name: CD - Publicar informe
+    needs: verificar
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Publicar en GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
